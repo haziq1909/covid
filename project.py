@@ -77,7 +77,7 @@ y_pred_logreg = logreg_model.predict(X_test)
 y_prob_logreg = logreg_model.predict_proba(X_test)[:, 1]
 
 # XGBoost Model
-xgb_model = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
+xgb_model = XGBClassifier(eval_metric='logloss', random_state=42)
 xgb_model.fit(X_train_res, y_train_res)
 y_pred_xgb = xgb_model.predict(X_test)
 y_prob_xgb = xgb_model.predict_proba(X_test)[:, 1]
