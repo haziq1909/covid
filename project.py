@@ -93,12 +93,6 @@ if page == "Home":
     st.subheader("📂 Dataset Asal")
     st.dataframe(df.head())
 
-    st.write("Senarai negeri unik dalam dataset:")
-    st.write(df['state'].unique())
-
-    st.write("Bilangan rekod setiap negeri:")
-    st.write(df['state'].value_counts())
-
 
     st.subheader("📊 Taburan Umur mengikut Status BID")
     fig1, ax1 = plt.subplots(figsize=(10, 5))
