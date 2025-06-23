@@ -55,9 +55,7 @@ X = imputer.fit_transform(df[features])
 y = df[target].values
 
 # Split dataset
-X_train, X_test, y_train, y_test = train_test_split(X, y,
-                                                    test_size=0.2,
-                                                    random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # Balance dataset with SMOTE
 smote = SMOTE(random_state=42)

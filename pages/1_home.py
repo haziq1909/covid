@@ -47,9 +47,9 @@ def load_data():
 df = load_data()
 
 # Load models and imputer for classification reports etc.
-logreg_model = joblib.load("logreg_model.pkl")
-xgb_model = joblib.load("xgb_model.pkl")
-imputer = joblib.load("imputer.pkl")
+logreg_model = joblib.load("models/logreg_model.pkl")
+xgb_model = joblib.load("models/xgb_model.pkl")
+imputer = joblib.load("models/imputer.pkl")
 
 # Mapping negeri ke integer
 state_label_map = {state: i for i, state in enumerate(df['state'].unique())}

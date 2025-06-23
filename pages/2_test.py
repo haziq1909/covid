@@ -3,11 +3,11 @@ import numpy as np
 import pandas as pd
 import joblib
 
-# Load models dan artefak
-logreg_model = joblib.load("logreg_model.pkl")
-xgb_model = joblib.load("xgb_model.pkl")
-imputer = joblib.load("imputer.pkl")
-state_label_map = joblib.load("state_label_map.pkl")
+# Load models 
+logreg_model = joblib.load("models/logreg_model.pkl")
+xgb_model = joblib.load("models/xgb_model.pkl")
+imputer = joblib.load("models/imputer.pkl")
+state_label_map = joblib.load("models/state_label_map.pkl")
 
 features = ['age', 'comorb', 'vaccinated_dose1', 'vaccinated_dose2',
             'vaccinated_dose3', 'state_code', 'elderly_comorb', 'unvax_comorb',
