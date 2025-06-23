@@ -93,7 +93,6 @@ if page == "Home":
     st.subheader("📂 Dataset Asal")
     st.dataframe(df.head())
 
-
     st.subheader("📊 Taburan Umur mengikut Status BID")
     fig1, ax1 = plt.subplots(figsize=(10, 5))
     sns.histplot(data=df, x='age', hue='bid', bins=30, kde=True, ax=ax1)
