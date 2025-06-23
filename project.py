@@ -109,7 +109,7 @@ if page == "Home":
 
     st.subheader("🗺️ Negeri dengan Kadar BID Tertinggi")
     state_bid_rate = df.groupby('state')['bid'].mean().sort_values(ascending=False)
-    st.write(state_bid_rate.head(10))
+    st.write(state_bid_rate) 
 
     st.subheader("🚀 Logistic Regression - Classification Report")
     st.text(classification_report(y_test, y_pred_logreg))
