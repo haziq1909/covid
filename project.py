@@ -1,46 +1,39 @@
-# -*- coding: utf-8 -*-
+# project.py
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from imblearn.over_sampling import SMOTE
-from xgboost import XGBClassifier
 import streamlit as st
+import joblib
 
-# Load dataset and preprocessing only once at start
+# Load models & artifacts
+logreg_model = joblib.load("logreg_model.pkl")
+xgb_model = joblib.load("xgb_model.pkl")
+imputer = joblib.load("imputer.pkl")
+state_label_map = joblib.load("state_label_map.pkl")
+
+# Load dataset for visualization & preprocessing
 @st.cache_data
 def load_data():
     df = pd.read_csv("covid_deaths_linelist.csv")
     df.columns = df.columns.str.lower()
     df['bid'] = df['bid'].astype(int)
     df['comorb'] = df['comorb'].fillna(0).astype(int)
-    df['brand1'] = df['brand1'].fillna('Unknown')
-
     placeholders = ["Pending VMS sync", "Unknown", "Not Available", "N/A", "NA"]
     for placeholder in placeholders:
         df.replace(placeholder, np.nan, inplace=True)
-
-    if 'age' in df.columns:
-        df['age'] = df['age'].fillna(df['age'].median())
-
-    cat_cols = ['sex', 'state', 'citizenship', 'comorb']
-    for col in cat_cols:
+    df['age'] = df['age'].fillna(df['age'].median())
+    for col in ['sex', 'state', 'citizenship', 'comorb']:
         if col in df.columns:
             df[col] = df[col].fillna(df[col].mode()[0])
-
     df['vaccinated_dose1'] = df['date_dose1'].notnull().astype(int)
     df['vaccinated_dose2'] = df['date_dose2'].notnull().astype(int)
     df['vaccinated_dose3'] = df['date_dose3'].notnull().astype(int)
-
     df['elderly_comorb'] = ((df['age'] >= 60) & (df['comorb'] == 1)).astype(int)
     df['unvax_comorb'] = ((df['comorb'] == 1) & (df['vaccinated_dose1'] == 0)).astype(int)
     df['elderly_unvax'] = ((df['age'] >= 60) & (df['vaccinated_dose1'] == 0)).astype(int)
-
     df['risk_score'] = (
         (df['age'] >= 60).astype(int) * 2 +
         df['comorb'] * 2 +
@@ -48,70 +41,63 @@ def load_data():
         (df['vaccinated_dose2'] == 0).astype(int) +
         (df['vaccinated_dose3'] == 0).astype(int)
     )
-
+    df['state_code'] = df['state'].map(state_label_map)
     return df
 
 df = load_data()
 
-# Buat peta negeri ke integer untuk training model
-state_label_map = {state: i for i, state in enumerate(df['state'].unique())}
-df['state_code'] = df['state'].map(state_label_map)
-
 features = ['age', 'comorb', 'vaccinated_dose1', 'vaccinated_dose2',
-            'vaccinated_dose3', 'state_code', 'elderly_comorb', 'unvax_comorb', 'elderly_unvax', 'risk_score']
+            'vaccinated_dose3', 'state_code', 'elderly_comorb', 'unvax_comorb',
+            'elderly_unvax', 'risk_score']
+
 target = 'bid'
 
-imputer = SimpleImputer(strategy='median')
-X = imputer.fit_transform(df[features])
+# Prepare test data for evaluation
+X = imputer.transform(df[features])
 y = df[target].values
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y,
+                                                    test_size=0.2,
+                                                    random_state=42)
 
-smote = SMOTE(random_state=42)
-X_train_res, y_train_res = smote.fit_resample(X_train, y_train)
-
-# Logistic Regression Model
-logreg_model = LogisticRegression(max_iter=1000, random_state=42)
-logreg_model.fit(X_train_res, y_train_res)
-y_pred_logreg = logreg_model.predict(X_test)
-y_prob_logreg = logreg_model.predict_proba(X_test)[:, 1]
-
-# XGBoost Model
-xgb_model = XGBClassifier(eval_metric='logloss', random_state=42)
-xgb_model.fit(X_train_res, y_train_res)
-y_pred_xgb = xgb_model.predict(X_test)
-y_prob_xgb = xgb_model.predict_proba(X_test)[:, 1]
-
-# --- Sidebar for navigation ---
+# Sidebar for navigation
 st.sidebar.title("Navigasi")
 page = st.sidebar.radio("Pilih Halaman", ["Home", "Uji Model"])
 
 if page == "Home":
     st.title("🚑 Analisis Kematian COVID-19 (BID)")
-    st.write("**Sila scroll untuk lihat visualisasi dan laporan penuh model.**")
 
+    # Dataset
     st.subheader("📂 Dataset Asal")
     st.dataframe(df.head())
 
+    # Age distribution by BID
     st.subheader("📊 Taburan Umur mengikut Status BID")
     fig1, ax1 = plt.subplots(figsize=(10, 5))
     sns.histplot(data=df, x='age', hue='bid', bins=30, kde=True, ax=ax1)
     ax1.set_title('Age Distribution by BID Status')
     st.pyplot(fig1)
 
+    # Percentage of BID
     st.subheader("🔢 Peratus BID")
     bid_counts = df['bid'].value_counts(normalize=True)
     st.write(bid_counts)
 
+    # Comorbidity vs BID
     st.subheader("📌 Komorbiditi vs BID")
     comorb_bid = pd.crosstab(df['comorb'], df['bid'], normalize='index')
     st.write(comorb_bid)
 
+    # States with highest BID rate
     st.subheader("🗺️ Negeri dengan Kadar BID Tertinggi")
     state_bid_rate = df.groupby('state')['bid'].mean().sort_values(ascending=False)
     st.write(state_bid_rate.head(10))
 
+    # Logistic Regression Report
     st.subheader("🚀 Logistic Regression - Classification Report")
+    y_pred_logreg = logreg_model.predict(X_test)
+    y_prob_logreg = logreg_model.predict_proba(X_test)[:, 1]
     st.text(classification_report(y_test, y_pred_logreg))
 
     cm_logreg = confusion_matrix(y_test, y_pred_logreg)
@@ -120,10 +106,12 @@ if page == "Home":
     sns.heatmap(cm_logreg, annot=True, fmt='d', cmap='Blues', ax=ax2)
     ax2.set_title("Logistic Regression Confusion Matrix")
     st.pyplot(fig2)
-
     st.write(f"ROC AUC (Logistic Regression): {roc_auc_score(y_test, y_prob_logreg):.4f}")
 
+    # XGBoost Report
     st.subheader("🚀 XGBoost + SMOTE - Classification Report")
+    y_pred_xgb = xgb_model.predict(X_test)
+    y_prob_xgb = xgb_model.predict_proba(X_test)[:, 1]
     st.text(classification_report(y_test, y_pred_xgb))
 
     cm_xgb = confusion_matrix(y_test, y_pred_xgb)
@@ -132,9 +120,9 @@ if page == "Home":
     sns.heatmap(cm_xgb, annot=True, fmt='d', cmap='Oranges', ax=ax3)
     ax3.set_title("XGBoost + SMOTE Confusion Matrix")
     st.pyplot(fig3)
-
     st.write(f"ROC AUC (XGBoost): {roc_auc_score(y_test, y_prob_xgb):.4f}")
 
+    # Feature Importance from XGBoost
     st.subheader("📌 Kepentingan Ciri (XGBoost)")
     importances = xgb_model.feature_importances_
     fig4, ax4 = plt.subplots(figsize=(8, 6))
