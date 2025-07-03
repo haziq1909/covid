@@ -76,6 +76,14 @@ logreg_full.fit(X_train_res, y_train_res)
 joblib.dump(imputer_full, "models/imputer_full.pkl")
 joblib.dump(logreg_full, "models/logreg_full.pkl")
 
+# Train XGBoost model full features
+xgb_full = XGBClassifier(eval_metric='logloss', random_state=42)
+xgb_full.fit(X_train_res, y_train_res)
+
+# Save XGBoost full model
+joblib.dump(xgb_full, "models/xgb_full.pkl")
+
+
 # Feature selection based on coefficients >= 0.4 (absolute value)
 coefs = logreg_full.coef_[0]
 abs_coefs = np.abs(coefs)

@@ -57,7 +57,6 @@ full_features = [
     'unvax_comorb', 'elderly_unvax', 'risk_score'
 ]
 
-# Load selected features list saved from training
 selected_features = joblib.load("models/selected_features.pkl")
 
 target = 'bid'
@@ -67,8 +66,9 @@ y = df[target].values
 imputer_full = joblib.load("models/imputer_full.pkl")
 imputer_selected = joblib.load("models/imputer.pkl")
 
-# Load models (before retrain = full features, after retrain = selected features)
+# Load models
 logreg_full = joblib.load("models/logreg_full.pkl")
+xgb_full = joblib.load("models/xgb_full.pkl")  # Pastikan ada model ini
 logreg_selected = joblib.load("models/logreg_model.pkl")
 xgb_selected = joblib.load("models/xgb_model.pkl")
 
@@ -84,6 +84,8 @@ X_selected = imputer_selected.transform(df[selected_features])
 # Predictions and probabilities - full model (before retrain)
 y_pred_logreg_full = logreg_full.predict(X_full)
 y_prob_logreg_full = logreg_full.predict_proba(X_full)[:, 1]
+y_pred_xgb_full = xgb_full.predict(X_full)
+y_prob_xgb_full = xgb_full.predict_proba(X_full)[:, 1]
 
 # Predictions and probabilities - selected model (after retrain)
 y_pred_logreg_sel = logreg_selected.predict(X_selected)
@@ -93,62 +95,97 @@ y_pred_xgb_sel = xgb_selected.predict(X_selected)
 y_prob_xgb_sel = xgb_selected.predict_proba(X_selected)[:, 1]
 
 # Display classification reports
-st.subheader("📊 Logistic Regression - Before Feature Selection")
+st.subheader("📊 Logistic Regression - Before Feature Selection (Full Features)")
 st.text(classification_report(y, y_pred_logreg_full))
 
-st.subheader("📊 Logistic Regression - After Feature Selection")
+st.subheader("📊 XGBoost - Before Feature Selection (Full Features)")
+st.text(classification_report(y, y_pred_xgb_full))
+
+st.subheader("📊 Logistic Regression - After Feature Selection (Selected Features)")
 st.text(classification_report(y, y_pred_logreg_sel))
 
-st.subheader("📊 XGBoost - After Feature Selection")
+st.subheader("📊 XGBoost - After Feature Selection (Selected Features)")
 st.text(classification_report(y, y_pred_xgb_sel))
 
 # Display ROC AUC scores
 st.write(f"ROC AUC Logistic Regression (Full features): {roc_auc_score(y, y_prob_logreg_full):.4f}")
+st.write(f"ROC AUC XGBoost (Full features): {roc_auc_score(y, y_prob_xgb_full):.4f}")
 st.write(f"ROC AUC Logistic Regression (Selected features): {roc_auc_score(y, y_prob_logreg_sel):.4f}")
 st.write(f"ROC AUC XGBoost (Selected features): {roc_auc_score(y, y_prob_xgb_sel):.4f}")
 
 # Confusion matrices side by side
-fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+fig, axes = plt.subplots(1, 4, figsize=(24, 5))
 
 cm_logreg_full = confusion_matrix(y, y_pred_logreg_full)
 sns.heatmap(cm_logreg_full, annot=True, fmt='d', cmap='Blues', ax=axes[0])
 axes[0].set_title("Confusion Matrix\nLogReg Full Features")
 
+cm_xgb_full = confusion_matrix(y, y_pred_xgb_full)
+sns.heatmap(cm_xgb_full, annot=True, fmt='d', cmap='Purples', ax=axes[1])
+axes[1].set_title("Confusion Matrix\nXGBoost Full Features")
+
 cm_logreg_sel = confusion_matrix(y, y_pred_logreg_sel)
-sns.heatmap(cm_logreg_sel, annot=True, fmt='d', cmap='Greens', ax=axes[1])
-axes[1].set_title("Confusion Matrix\nLogReg Selected Features")
+sns.heatmap(cm_logreg_sel, annot=True, fmt='d', cmap='Greens', ax=axes[2])
+axes[2].set_title("Confusion Matrix\nLogReg Selected Features")
 
 cm_xgb_sel = confusion_matrix(y, y_pred_xgb_sel)
-sns.heatmap(cm_xgb_sel, annot=True, fmt='d', cmap='Oranges', ax=axes[2])
-axes[2].set_title("Confusion Matrix\nXGBoost Selected Features")
+sns.heatmap(cm_xgb_sel, annot=True, fmt='d', cmap='Oranges', ax=axes[3])
+axes[3].set_title("Confusion Matrix\nXGBoost Selected Features")
 
 st.pyplot(fig)
 
-# Feature importance for selected features - Logistic Regression
-coef = logreg_selected.coef_[0]
-importance_logreg = pd.DataFrame({
-    'Feature': selected_features,
-    'Coefficient': coef,
-    'Abs_Coefficient': np.abs(coef)
+# Feature importance - Logistic Regression (Full Features)
+coef_full = logreg_full.coef_[0]
+importance_logreg_full = pd.DataFrame({
+    'Feature': full_features,
+    'Coefficient': coef_full,
+    'Abs_Coefficient': np.abs(coef_full)
 }).sort_values(by='Abs_Coefficient', ascending=False)
 
-st.subheader("📌 Feature Importance - Logistic Regression (Selected Features)")
-fig2, ax2 = plt.subplots(figsize=(8, 5))
-sns.barplot(x='Abs_Coefficient', y='Feature', data=importance_logreg, ax=ax2)
-ax2.set_title("Logistic Regression Coefficients (|coef|)")
+st.subheader("📌 Feature Importance - Logistic Regression (Full Features)")
+fig2, ax2 = plt.subplots(figsize=(8, 6))
+sns.barplot(x='Abs_Coefficient', y='Feature', data=importance_logreg_full, ax=ax2)
+ax2.set_title("Logistic Regression Coefficients (Full Features, |coef|)")
 st.pyplot(fig2)
-st.dataframe(importance_logreg)
+st.dataframe(importance_logreg_full)
 
-# Feature importance for selected features - XGBoost
-importances = xgb_selected.feature_importances_
-importance_xgb = pd.DataFrame({
-    'Feature': selected_features,
-    'Importance': importances
+# Feature importance - XGBoost (Full Features)
+importance_xgb_full = pd.DataFrame({
+    'Feature': full_features,
+    'Importance': xgb_full.feature_importances_
 }).sort_values(by='Importance', ascending=False)
 
-st.subheader("📌 Feature Importance - XGBoost (Selected Features)")
-fig3, ax3 = plt.subplots(figsize=(8, 5))
-sns.barplot(x='Importance', y='Feature', data=importance_xgb, ax=ax3)
-ax3.set_title("XGBoost Feature Importances")
+st.subheader("📌 Feature Importance - XGBoost (Full Features)")
+fig3, ax3 = plt.subplots(figsize=(8, 6))
+sns.barplot(x='Importance', y='Feature', data=importance_xgb_full, ax=ax3)
+ax3.set_title("XGBoost Feature Importance (Full Features)")
 st.pyplot(fig3)
-st.dataframe(importance_xgb)
+st.dataframe(importance_xgb_full)
+
+# # Feature importance - Logistic Regression (Selected Features)
+# coef_sel = logreg_selected.coef_[0]
+# importance_logreg_sel = pd.DataFrame({
+#     'Feature': selected_features,
+#     'Coefficient': coef_sel,
+#     'Abs_Coefficient': np.abs(coef_sel)
+# }).sort_values(by='Abs_Coefficient', ascending=False)
+
+# st.subheader("📌 Feature Importance - Logistic Regression (Selected Features)")
+# fig4, ax4 = plt.subplots(figsize=(8, 6))
+# sns.barplot(x='Abs_Coefficient', y='Feature', data=importance_logreg_sel, ax=ax4)
+# ax4.set_title("Logistic Regression Coefficients (Selected Features, |coef|)")
+# st.pyplot(fig4)
+# st.dataframe(importance_logreg_sel)
+
+# # Feature importance - XGBoost (Selected Features)
+# importance_xgb_sel = pd.DataFrame({
+#     'Feature': selected_features,
+#     'Importance': xgb_selected.feature_importances_
+# }).sort_values(by='Importance', ascending=False)
+
+# st.subheader("📌 Feature Importance - XGBoost (Selected Features)")
+# fig5, ax5 = plt.subplots(figsize=(8, 6))
+# sns.barplot(x='Importance', y='Feature', data=importance_xgb_sel, ax=ax5)
+# ax5.set_title("XGBoost Feature Importance (Selected Features)")
+# st.pyplot(fig5)
+# st.dataframe(importance_xgb_sel)
