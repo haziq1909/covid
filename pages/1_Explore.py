@@ -43,89 +43,112 @@ def load_data():
     )
     return df
 
-# Load dataset
+# Load data
 df = load_data()
 
-# Load models and imputer for classification reports etc.
-logreg_model = joblib.load("models/logreg_model.pkl")
-xgb_model = joblib.load("models/xgb_model.pkl")
-imputer = joblib.load("models/imputer.pkl")
-
-# Mapping negeri ke integer
+# Mapping states to integers
 state_label_map = {state: i for i, state in enumerate(df['state'].unique())}
 df['state_code'] = df['state'].map(state_label_map)
 
-features = ['age', 'comorb', 'vaccinated_dose1', 'vaccinated_dose2',
-            'vaccinated_dose3', 'state_code', 'elderly_comorb', 'unvax_comorb', 'elderly_unvax', 'risk_score']
-target = 'bid'
+# Full and selected feature sets
+full_features = [
+    'age', 'comorb', 'vaccinated_dose1', 'vaccinated_dose2',
+    'vaccinated_dose3', 'state_code', 'elderly_comorb',
+    'unvax_comorb', 'elderly_unvax', 'risk_score'
+]
 
-# Impute features and prepare X, y for evaluation
-X = imputer.transform(df[features])
+# Load selected features list saved from training
+selected_features = joblib.load("models/selected_features.pkl")
+
+target = 'bid'
 y = df[target].values
 
-# Predict with loaded models
-y_pred_logreg = logreg_model.predict(X)
-y_prob_logreg = logreg_model.predict_proba(X)[:, 1]
-y_pred_xgb = xgb_model.predict(X)
-y_prob_xgb = xgb_model.predict_proba(X)[:, 1]
+# Load imputers
+imputer_full = joblib.load("models/imputer_full.pkl")
+imputer_selected = joblib.load("models/imputer.pkl")
 
-st.title("🚑 Analisis Kematian COVID-19 (BID) - Dashboard Data & Model")
+# Load models (before retrain = full features, after retrain = selected features)
+logreg_full = joblib.load("models/logreg_full.pkl")
+logreg_selected = joblib.load("models/logreg_model.pkl")
+xgb_selected = joblib.load("models/xgb_model.pkl")
 
-st.subheader("📂 Dataset Asal (Contoh 5 Baris)")
+st.title("🚑 COVID-19 BID Analysis - Model Comparison")
+
+st.subheader("📂 Dataset Preview (5 Rows)")
 st.dataframe(df.head())
 
-st.subheader("📊 Taburan Umur mengikut Status BID")
-fig1, ax1 = plt.subplots(figsize=(10, 5))
-sns.histplot(data=df, x='age', hue='bid', bins=30, kde=True, ax=ax1)
-ax1.set_title('Taburan Umur mengikut Status BID')
-st.pyplot(fig1)
+# Prepare feature matrices
+X_full = imputer_full.transform(df[full_features])
+X_selected = imputer_selected.transform(df[selected_features])
 
-st.subheader("🔢 Peratus BID")
-bid_counts = df['bid'].value_counts(normalize=True)
-st.write(bid_counts)
+# Predictions and probabilities - full model (before retrain)
+y_pred_logreg_full = logreg_full.predict(X_full)
+y_prob_logreg_full = logreg_full.predict_proba(X_full)[:, 1]
 
-st.subheader("📌 Komorbiditi vs BID")
-comorb_bid = pd.crosstab(df['comorb'], df['bid'], normalize='index')
-st.write(comorb_bid)
+# Predictions and probabilities - selected model (after retrain)
+y_pred_logreg_sel = logreg_selected.predict(X_selected)
+y_prob_logreg_sel = logreg_selected.predict_proba(X_selected)[:, 1]
 
-st.subheader("🗺️ Negeri dengan Kadar BID Tertinggi")
-state_bid_rate = df.groupby('state')['bid'].mean().sort_values(ascending=False)
-st.write(state_bid_rate)
+y_pred_xgb_sel = xgb_selected.predict(X_selected)
+y_prob_xgb_sel = xgb_selected.predict_proba(X_selected)[:, 1]
 
-st.subheader("🚀 Logistic Regression - Classification Report")
-st.text(classification_report(y, y_pred_logreg))
+# Display classification reports
+st.subheader("📊 Logistic Regression - Before Feature Selection")
+st.text(classification_report(y, y_pred_logreg_full))
 
-cm_logreg = confusion_matrix(y, y_pred_logreg)
-st.write("Confusion Matrix (Logistic Regression):")
-fig2, ax2 = plt.subplots()
-sns.heatmap(cm_logreg, annot=True, fmt='d', cmap='Blues', ax=ax2)
-ax2.set_title("Confusion Matrix Logistic Regression")
+st.subheader("📊 Logistic Regression - After Feature Selection")
+st.text(classification_report(y, y_pred_logreg_sel))
+
+st.subheader("📊 XGBoost - After Feature Selection")
+st.text(classification_report(y, y_pred_xgb_sel))
+
+# Display ROC AUC scores
+st.write(f"ROC AUC Logistic Regression (Full features): {roc_auc_score(y, y_prob_logreg_full):.4f}")
+st.write(f"ROC AUC Logistic Regression (Selected features): {roc_auc_score(y, y_prob_logreg_sel):.4f}")
+st.write(f"ROC AUC XGBoost (Selected features): {roc_auc_score(y, y_prob_xgb_sel):.4f}")
+
+# Confusion matrices side by side
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+cm_logreg_full = confusion_matrix(y, y_pred_logreg_full)
+sns.heatmap(cm_logreg_full, annot=True, fmt='d', cmap='Blues', ax=axes[0])
+axes[0].set_title("Confusion Matrix\nLogReg Full Features")
+
+cm_logreg_sel = confusion_matrix(y, y_pred_logreg_sel)
+sns.heatmap(cm_logreg_sel, annot=True, fmt='d', cmap='Greens', ax=axes[1])
+axes[1].set_title("Confusion Matrix\nLogReg Selected Features")
+
+cm_xgb_sel = confusion_matrix(y, y_pred_xgb_sel)
+sns.heatmap(cm_xgb_sel, annot=True, fmt='d', cmap='Oranges', ax=axes[2])
+axes[2].set_title("Confusion Matrix\nXGBoost Selected Features")
+
+st.pyplot(fig)
+
+# Feature importance for selected features - Logistic Regression
+coef = logreg_selected.coef_[0]
+importance_logreg = pd.DataFrame({
+    'Feature': selected_features,
+    'Coefficient': coef,
+    'Abs_Coefficient': np.abs(coef)
+}).sort_values(by='Abs_Coefficient', ascending=False)
+
+st.subheader("📌 Feature Importance - Logistic Regression (Selected Features)")
+fig2, ax2 = plt.subplots(figsize=(8, 5))
+sns.barplot(x='Abs_Coefficient', y='Feature', data=importance_logreg, ax=ax2)
+ax2.set_title("Logistic Regression Coefficients (|coef|)")
 st.pyplot(fig2)
+st.dataframe(importance_logreg)
 
-st.write(f"ROC AUC (Logistic Regression): {roc_auc_score(y, y_prob_logreg):.4f}")
-
-st.subheader("🚀 XGBoost + SMOTE - Classification Report")
-st.text(classification_report(y, y_pred_xgb))
-
-cm_xgb = confusion_matrix(y, y_pred_xgb)
-st.write("Confusion Matrix (XGBoost):")
-fig3, ax3 = plt.subplots()
-sns.heatmap(cm_xgb, annot=True, fmt='d', cmap='Oranges', ax=ax3)
-ax3.set_title("Confusion Matrix XGBoost + SMOTE")
-st.pyplot(fig3)
-
-st.write(f"ROC AUC (XGBoost): {roc_auc_score(y, y_prob_xgb):.4f}")
-
-st.subheader("📌 Kepentingan Ciri (XGBoost)")
-importances = xgb_model.feature_importances_
-fig4, ax4 = plt.subplots(figsize=(8, 6))
-sns.barplot(x=importances, y=features, ax=ax4)
-ax4.set_title("Kepentingan Ciri oleh XGBoost")
-st.pyplot(fig4)
-
-importance_df = pd.DataFrame({
-    'Feature': features,
+# Feature importance for selected features - XGBoost
+importances = xgb_selected.feature_importances_
+importance_xgb = pd.DataFrame({
+    'Feature': selected_features,
     'Importance': importances
 }).sort_values(by='Importance', ascending=False)
-st.write("📊 Jadual Kepentingan Ciri:")
-st.dataframe(importance_df)
+
+st.subheader("📌 Feature Importance - XGBoost (Selected Features)")
+fig3, ax3 = plt.subplots(figsize=(8, 5))
+sns.barplot(x='Importance', y='Feature', data=importance_xgb, ax=ax3)
+ax3.set_title("XGBoost Feature Importances")
+st.pyplot(fig3)
+st.dataframe(importance_xgb)
