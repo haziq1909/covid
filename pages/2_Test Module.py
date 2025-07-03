@@ -3,15 +3,12 @@ import numpy as np
 import pandas as pd
 import joblib
 
-# Load models 
+# Load models and selected features list
 logreg_model = joblib.load("models/logreg_model.pkl")
 xgb_model = joblib.load("models/xgb_model.pkl")
 imputer = joblib.load("models/imputer.pkl")
 state_label_map = joblib.load("models/state_label_map.pkl")
-
-features = ['age', 'comorb', 'vaccinated_dose1', 'vaccinated_dose2',
-            'vaccinated_dose3', 'state_code', 'elderly_comorb', 'unvax_comorb',
-            'elderly_unvax', 'risk_score']
+selected_features = joblib.load("models/selected_features.pkl")  # Load selected features list
 
 st.title("🧪 Uji Model Risiko Kematian COVID-19 (BID)")
 
@@ -39,16 +36,32 @@ risk_score_input = (
     int(not dose3)
 )
 
-input_array = np.array([[age_input, comorb_encoded,
-                         int(dose1), int(dose2), int(dose3), state_encoded,
-                         elderly_comorb_input, unvax_comorb_input, elderly_unvax_input, risk_score_input]])
+# Buat dict dengan semua features penuh
+full_input_dict = {
+    'age': age_input,
+    'comorb': comorb_encoded,
+    'vaccinated_dose1': int(dose1),
+    'vaccinated_dose2': int(dose2),
+    'vaccinated_dose3': int(dose3),
+    'state_code': state_encoded,
+    'elderly_comorb': elderly_comorb_input,
+    'unvax_comorb': unvax_comorb_input,
+    'elderly_unvax': elderly_unvax_input,
+    'risk_score': risk_score_input
+}
 
-st.write("Data input kepada model:")
-st.dataframe(pd.DataFrame(input_array, columns=features))
+# Buat DataFrame input
+input_df = pd.DataFrame([full_input_dict])
+
+# Ambil subset hanya selected features untuk imputer & model
+input_selected = input_df[selected_features]
+
+st.write("Data input kepada model (selected features):")
+st.dataframe(input_selected)
 
 if st.button("🔍 Ramalkan Risiko BID"):
-    # Impute input data (walaupun input lengkap, untuk konsistensi)
-    input_imputed = imputer.transform(input_array)
+    # Impute input data
+    input_imputed = imputer.transform(input_selected)
 
     # Predict probabiliti dengan model XGBoost dan Logistic Regression
     pred_prob_xgb = xgb_model.predict_proba(input_imputed)[0][1]
